@@ -44,9 +44,17 @@ jobs:
           key: ut-dipper-downloads-${{ hashFiles('deviceinfo') }}
           restore-keys: ut-dipper-downloads-
 
+      - name: Подготовить сборочное дерево
+        run: |
+          for d in /mnt "$HOME" "$RUNNER_TEMP" /; do
+            printf '%s: %s GiB свободно\n' "$d" "$(df -Pk "$d" | awk 'NR==2{print int($4/1024/1024)}')"
+          done
+          sudo mkdir -p "$BUILD_DIR"
+          sudo chown "$(id -u):$(id -g)" "$BUILD_DIR"
+          df -h "$BUILD_DIR"
+
       - name: Собрать
         run: |
-          mkdir -p "$BUILD_DIR"
           ./build.sh -b "$BUILD_DIR"
 
       - name: Сохранить артефакты
