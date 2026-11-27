@@ -57,6 +57,14 @@ jobs:
         run: |
           ./build.sh -b "$BUILD_DIR"
 
+      - name: Сложить образы в out/
+        run: |
+          mkdir -p out
+          # boot.img/recovery.img собираются во временное дерево, в out/ их
+          # кладёт только тарбол-скрипт для device_*.tar.xz.
+          cp -f "$BUILD_DIR/tmp/partitions/"*.img out/ 2>/dev/null || true
+          ls -lh out/
+
       - name: Сохранить артефакты
         uses: actions/upload-artifact@v4
         with:
