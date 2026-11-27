@@ -69,7 +69,10 @@ fi
 adb() { command adb "$@" </dev/null; }
 
 if [ -z "${ANDROID_SERIAL:-}" ]; then
-    n=$(( $(adb devices | sed 1d | grep -c .) + $(fastboot devices 2>/dev/null | grep -c .) ))
+    # grep -c завершается с кодом 1, если ничего не нашлось, а set -e на такой
+    # подстановке молча убивает скрипт (устройство может быть в recovery, и
+    # тогда fastboot devices пуст).
+    n=$(( $(adb devices | sed 1d | grep -c . || true) + $(fastboot devices 2>/dev/null | grep -c . || true) ))
     [ "$n" -le 1 ] || die "More than one phone is connected. Connect only the ${NAME}, or set ANDROID_SERIAL to its serial number."
 fi
 
@@ -289,7 +292,18 @@ adb shell 'touch /cache/recovery/allow-unsigned'
 say "Installing Ubuntu Touch"
 # The recovery runs ubuntu_command by itself when it starts: it maps the
 # dynamic partitions, installs, and boots into Ubuntu Touch.
-adb reboot recovery
+#
+# Xiaomi's bootloader does not honour "reboot recovery": it starts Android or
+# its own MI Recovery instead of the UBports one. So go through the bootloader
+# and boot this release's recovery image directly.
+adb reboot bootloader || true
+sleep 8
+if ! fastboot devices | grep -q .; then
+    echo "The phone did not come back in fastboot; falling back to 'reboot recovery'."
+    adb reboot recovery
+else
+    fastboot boot "$FILES_DIR/recovery.img"
+fi
 cat <<EOF
 The phone now restarts into the recovery and installs Ubuntu Touch on its own
 (about 5-10 minutes, a progress animation is shown). Do not unplug it. When it
