@@ -1,0 +1,58 @@
+name: build
+
+# Порядок работы сборочных тулов тот же, что в эталонном пайплайне UBports
+# (halium-generic-adaptation-build-tools, gsi-port-ci.yml), только вместо
+# GitLab CI используется GitHub Actions.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild_kernel:
+        description: "Собрать ядро заново (игнорировать кэш)"
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      # Портовый build.sh вместо generic: он ставит umask 022 и чинит права
+      # на файлы overlay.
+      ADAPTATION_TOOLS_USE_BUILD_WRAPPER: "1"
+      # Сборочное дерево на /mnt - на корневом разделе раннера мало места.
+      BUILD_DIR: /mnt/ut-build
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Установить зависимости
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            bc bison build-essential ca-certificates cpio curl \
+            fakeroot flex git kmod libelf-dev libssl-dev libtinfo5 lz4 \
+            python2 python3 sudo unzip wget xz-utils pahole libbpf-dev
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
+
+      - name: Восстановить кэш загрузок
+        if: ${{ !inputs.rebuild_kernel }}
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.BUILD_DIR }}/downloads
+          key: ut-dipper-downloads-${{ hashFiles('deviceinfo') }}
+          restore-keys: ut-dipper-downloads-
+
+      - name: Собрать
+        run: |
+          mkdir -p "$BUILD_DIR"
+          ./build.sh -b "$BUILD_DIR"
+
+      - name: Сохранить артефакты
+        uses: actions/upload-artifact@v4
+        with:
+          name: out
+          path: |
+            out/*
+          if-no-files-found: error
